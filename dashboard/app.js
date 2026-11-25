@@ -83,7 +83,7 @@ const SRC_LABEL = {
   global: 'the global winsorized median (its category and chains have too few live peers)',
 };
 
-function detail(r) {
+function detail(r, scroll = true) {
   const d = $('detail');
   d.hidden = false;
   const steps = r.farm_steps.map((s) => `<li>${esc(s)}</li>`).join('');
@@ -112,7 +112,7 @@ function detail(r) {
     `</tbody></table>` +
     `<h3>What the market already pays its live peers</h3>${peers}` +
     `<h3>How to farm it</h3><ol>${steps}</ol>`;
-  d.scrollIntoView({ block: 'nearest' });
+  if (scroll) d.scrollIntoView({ block: 'nearest' });
 }
 
 for (const id of ['q', 'cat', 'chain', 'watch', 'mintvl']) $(id).addEventListener('input', render);
@@ -132,4 +132,4 @@ if (hash.get('chain')) $('chain').value = hash.get('chain');
 if (hash.get('min')) $('mintvl').value = hash.get('min');
 render();
 const open = R.rows.find((r) => r.slug === hash.get('p')) ?? R.rows[0];
-if (open) detail(open);
+if (open) detail(open, false);
