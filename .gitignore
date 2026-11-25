@@ -3,3 +3,7 @@ node_modules/
 transcripts*.tar.gz
 competition.json
 requirements.json
+PLAN.md
+REQUIREMENTS.md
+ROUTE.md
+BUILD-REPORT.md
