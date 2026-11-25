@@ -10,29 +10,43 @@
 <header class="mast">
   <h1>Token Radar</h1>
   <p class="sub">Protocols that record no token yet, ranked by what their launch would be worth.
-  Implied value = TVL × the median market-cap/TVL of live-token peers in the same category,
-  adjusted for 7-day growth, time tracked with no token, and chain breadth.</p>
+  Every protocol on the house watchlist is here, plus the strongest pre-token protocols below
+  the TVL floor — the early launches a radar exists to find.</p>
   <p class="meta" id="meta"></p>
 </header>
+
+<section class="model" aria-label="How the model works">
+  <h2>How the implied value is worked out</h2>
+  <p>One function prices every row, from the snapshot's own figures only. Start with the
+  protocol's TVL. Multiply by the <strong>peer multiple</strong>: the winsorized median
+  market-cap/TVL of the live-token protocols in the same category (when a category has
+  fewer than four live peers, the median of live protocols sharing its chains; failing
+  that, the global median). Then adjust: <strong>growth</strong> — half of the 7-day TVL
+  change, clamped to −60%…+120%, because one week is a signal, not a destiny;
+  <strong>maturity</strong> — 0.60 for a brand-new listing rising to 1.00 after 1,095 days
+  tracked with no token; <strong>breadth</strong> — +3% per extra chain, capped at +15%.
+  A soft sanity cap holds a value to twice the largest live peer's market cap in its
+  category, with only 5% of any excess past the cap counting, so the biggest protocols
+  keep their size order instead of tying. Open any row to see its own numbers.</p>
+</section>
 
 <section class="controls" aria-label="Board controls">
   <input id="q" type="search" placeholder="Search name or slug…" aria-label="Search">
   <label><input id="watch" type="checkbox"> Watchlist only</label>
   <select id="cat" aria-label="Category"><option value="">All categories</option></select>
   <select id="chain" aria-label="Chain"><option value="">All chains</option></select>
-  <select id="sort" aria-label="Sort">
-    <option value="rank">Rank (implied value)</option>
-    <option value="tvl">TVL</option>
-    <option value="growth">7-day growth</option>
-    <option value="age">Age (days tokenless)</option>
-  </select>
+  <label class="slider">Min TVL <input id="mintvl" type="range" min="0" max="500" step="10" value="0">
+  <span id="mintvlv">$0</span></label>
+  <span class="count" id="count"></span>
 </section>
 
 <main>
   <table id="board">
     <thead><tr>
-      <th>#</th><th>Protocol</th><th>Category</th><th>Implied value</th>
-      <th>TVL</th><th>7d</th><th>Peer ×</th><th>Age</th><th></th>
+      <th data-k="rank">#</th><th data-k="name">Protocol</th><th>Category</th>
+      <th data-k="implied" class="num">Implied value</th>
+      <th data-k="tvl" class="num">TVL</th><th data-k="growth" class="num">7d</th>
+      <th data-k="mult" class="num">Peer ×</th><th data-k="age" class="num">Age</th><th></th>
     </tr></thead>
     <tbody id="rows"></tbody>
   </table>
@@ -40,7 +54,8 @@
 </main>
 
 <footer>
-  <p>Source: a sealed DefiLlama snapshot. A board's implied value is the entry's own claim,
+  <p>Source: a sealed DefiLlama snapshot; live-token protocols are never ranked — they are
+  the comparison set each row is priced from. An implied value is this board's own claim,
   worked out from the snapshot's figures alone — not a prediction that a token will launch.</p>
 </footer>
 

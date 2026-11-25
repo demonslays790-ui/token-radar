@@ -27,6 +27,24 @@ body {
   background: var(--panel); color: var(--ink); border: 1px solid var(--line);
   border-radius: 6px; padding: 7px 10px; font: inherit;
 }
+.model {
+  max-width: 1100px; margin: 14px auto 4px; padding: 14px 24px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  width: calc(100% - 48px);
+}
+.model h2 { margin: 0 0 6px; font-size: 16px; color: var(--accent); }
+.model p { margin: 0; color: var(--dim); max-width: 95ch; }
+.model strong { color: var(--ink); }
+.controls .slider { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); }
+.controls .slider span { font-family: var(--mono); color: var(--accent); min-width: 64px; }
+.controls .count { color: var(--dim); font-family: var(--mono); font-size: 13px; margin-left: auto; }
+th[data-k] { cursor: pointer; }
+th.sorted { color: var(--accent); }
+tbody tr.early { background: rgba(255, 180, 84, 0.045); }
+td .badge.early-b { border-color: var(--good); color: var(--good); }
+#detail .workings, #detail .peers { background: transparent; border: none; margin: 8px 0 4px; }
+#detail .workings td, #detail .peers td, #detail .peers th { border-bottom: 1px solid var(--line); padding: 5px 8px; }
+#detail h3 { margin: 18px 0 6px; font-size: 15px; color: var(--accent); }
 main { max-width: 1100px; margin: 0 auto; padding: 0 24px 24px; }
 table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
 th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }

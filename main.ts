@@ -82,6 +82,14 @@ function copyTree(from: string, to: string): string[] {
 }
 
 const dashFiles = copyTree(join(here, 'dashboard'), join(out, 'dashboard'));
+if (
+  !dashFiles.includes('index.html') ||
+  !dashFiles.some((f) => f.endsWith('.css')) ||
+  !dashFiles.some((f) => f.endsWith('.js'))
+) {
+  process.stderr.write('token radar: dashboard/ must hold index.html plus at least one .css and one .js file\n');
+  process.exit(1);
+}
 const shots = copyTree(join(here, 'screenshots'), join(out, 'screenshots'));
 if (shots.length < 3) {
   process.stderr.write(`token radar: screenshots/ holds ${shots.length} image(s): hand in 3, the board, a detail view and a filtered view\n`);
