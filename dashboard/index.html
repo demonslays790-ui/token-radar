@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Radar — pre-token protocols ranked by implied launch value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="mast">
+  <h1>Token Radar</h1>
+  <p class="sub">Protocols that record no token yet, ranked by what their launch would be worth.
+  Implied value = TVL × the median market-cap/TVL of live-token peers in the same category,
+  adjusted for 7-day growth, time tracked with no token, and chain breadth.</p>
+  <p class="meta" id="meta"></p>
+</header>
+
+<section class="controls" aria-label="Board controls">
+  <input id="q" type="search" placeholder="Search name or slug…" aria-label="Search">
+  <label><input id="watch" type="checkbox"> Watchlist only</label>
+  <select id="cat" aria-label="Category"><option value="">All categories</option></select>
+  <select id="chain" aria-label="Chain"><option value="">All chains</option></select>
+  <select id="sort" aria-label="Sort">
+    <option value="rank">Rank (implied value)</option>
+    <option value="tvl">TVL</option>
+    <option value="growth">7-day growth</option>
+    <option value="age">Age (days tokenless)</option>
+  </select>
+</section>
+
+<main>
+  <table id="board">
+    <thead><tr>
+      <th>#</th><th>Protocol</th><th>Category</th><th>Implied value</th>
+      <th>TVL</th><th>7d</th><th>Peer ×</th><th>Age</th><th></th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <article id="detail" hidden></article>
+</main>
+
+<footer>
+  <p>Source: a sealed DefiLlama snapshot. A board's implied value is the entry's own claim,
+  worked out from the snapshot's figures alone — not a prediction that a token will launch.</p>
+</footer>
+
+<script src="../data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
