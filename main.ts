@@ -98,8 +98,13 @@ writeFileSync(
   }),
 );
 
+const cappedRows = board.filter((r) => r.capped).length;
+const chainPriced = board.filter((r) => r.multiple_source === 'chain').length;
+const globalPriced = board.filter((r) => r.multiple_source === 'global').length;
 process.stdout.write(
   `token radar: ${snapshot.protocols.length} protocols, ${snapshot.watchlist.length} on the watchlist, ` +
     `${board.length} rows scored (${radar.summary.early} early finds, ${radar.summary.live} live set aside)\n` +
+    `token radar: model workings: ${cappedRows} rows soft-capped, ${chainPriced} priced from chain-mates, ` +
+    `${globalPriced} from the global peer set\n` +
     `token radar: wrote board.json, data.js, dashboard/ (${dashFiles.length} files), screenshots/ (${shots.length} images) and dossier.json to ${out}\n`,
 );

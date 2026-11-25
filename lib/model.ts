@@ -3,14 +3,18 @@
 // A protocol's implied value is what its token would be worth if it launched with the
 // record the snapshot shows. The value is built only from the snapshot's own figures:
 //
-//   multiple   = the median market-cap / TVL ratio of the live-token protocols in the
-//                same DefiLlama category (the global median when a category is thin)
+//   multiple   = the winsorized median market-cap / TVL ratio of the live-token
+//                protocols in the same DefiLlama category; when a category has too few
+//                live peers, the median of live protocols sharing a chain with this
+//                one; failing that, the global median
 //   base       = tvl_usd x multiple
 //   growth     = 1 + clamp(change_7d, -60, +120)% x 0.5     (a week is a signal)
 //   maturity   = 0.6 rising to 1.0 over 1,095 days tracked with no token
 //   breadth    = 1 + 3% per extra chain, capped at +15%
-//   implied    = min(base x growth x maturity x breadth,
-//                    2 x the largest live peer's market cap in the category)
+//   implied    = base x growth x maturity x breadth, held to a soft sanity cap of
+//                2 x the largest live peer's market cap in the category: past the cap
+//                only 5% of the excess counts, so the largest protocols keep their
+//                size order instead of tying at one capped figure
 //
 // One function scores every protocol; no name is ever special-cased. The board covers
 // the snapshot's whole watchlist and adds the pre-token protocols below the floor with
@@ -55,6 +59,17 @@ export interface BoardRow {
   change_7d: number | null;
   age_days: number | null;
   peer_multiple: number;
+  /** Where the multiple came from: the category's own peers, chain-mates, or the global set. */
+  multiple_source: 'category' | 'chain' | 'global';
+  /** The model's workings, so the detail view can show exactly why a row is worth what it is. */
+  base_value_usd: number;
+  growth_factor: number;
+  maturity_factor: number;
+  breadth_factor: number;
+  /** True when the soft sanity cap trimmed this row's raw value. */
+  capped: boolean;
+  /** The largest live-token protocols in the same category: the comparison set. */
+  peers: LivePeer[];
   watchlist: boolean;
 }
 
@@ -127,10 +142,44 @@ function median(values: number[]): number {
   return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
+/**
+ * The median of a ratio set with its extremes pulled in first: the lowest and highest
+ * `share` of values are replaced by the nearest kept value, so a single absurd listing
+ * (a token priced at 50x its TVL) cannot drag the multiple a category is priced from.
+ */
+function winsorizedMedian(values: number[], share: number): number {
+  if (values.length === 0) return 1;
+  const sorted = [...values].sort((x, y) => x - y);
+  const k = Math.floor(share * sorted.length);
+  if (k > 0) {
+    const lo = sorted[k]!;
+    const hi = sorted[sorted.length - 1 - k]!;
+    for (let i = 0; i < k; i++) {
+      sorted[i] = lo;
+      sorted[sorted.length - 1 - i] = hi;
+    }
+  }
+  return median(sorted);
+}
+
+/** Where a protocol's peer multiple was drawn from. */
+export type MultipleSource = 'category' | 'chain' | 'global';
+
+/** One live-token peer, as the detail view shows it: what the market already pays for it. */
+export interface LivePeer {
+  name: string;
+  symbol: string | null;
+  tvl_usd: number;
+  mcap_usd: number;
+  multiple: number;
+}
+
 /** The peer evidence the model prices from: per-category and global live-token multiples. */
 export interface PeerBook {
-  multipleFor: (p: SnapshotProtocol) => number;
+  multipleFor: (p: SnapshotProtocol) => { multiple: number; source: MultipleSource };
   peerMaxMcapFor: (p: SnapshotProtocol) => number;
+  /** The largest live-token protocols in the same category, for the detail view. */
+  peersFor: (p: SnapshotProtocol, n: number) => LivePeer[];
   globalMultiple: number;
 }
 
@@ -138,6 +187,9 @@ export function buildPeerBook(snapshot: Snapshot, cfg: RadarConfig = CONFIG): Pe
   const ratios = new Map<string, number[]>();
   const maxMcap = new Map<string, number>();
   const allRatios: number[] = [];
+  // Live-token protocols indexed by each chain they run on, for the chain-blended
+  // fallback: a thin category is priced from the protocols that share its chains.
+  const byChain = new Map<string, SnapshotProtocol[]>();
   let globalMax = 0;
   for (const p of snapshot.protocols) {
     if (isPreToken(p) || p.mcap_usd === null || p.mcap_usd <= 0 || p.tvl_usd <= 0) continue;
@@ -149,35 +201,97 @@ export function buildPeerBook(snapshot: Snapshot, cfg: RadarConfig = CONFIG): Pe
     allRatios.push(ratio);
     maxMcap.set(key, Math.max(maxMcap.get(key) ?? 0, p.mcap_usd));
     globalMax = Math.max(globalMax, p.mcap_usd);
+    for (const chain of p.chains) {
+      const mates = byChain.get(chain) ?? [];
+      mates.push(p);
+      byChain.set(chain, mates);
+    }
   }
-  const globalMultiple = allRatios.length > 0 ? median(allRatios) : 1;
+  const liveByCategory = new Map<string, SnapshotProtocol[]>();
+  for (const p of snapshot.protocols) {
+    if (isPreToken(p) || p.mcap_usd === null || p.mcap_usd <= 0 || p.tvl_usd <= 0) continue;
+    const key = p.category ?? 'Uncategorized';
+    const list = liveByCategory.get(key) ?? [];
+    list.push(p);
+    liveByCategory.set(key, list);
+  }
+  for (const list of liveByCategory.values()) {
+    list.sort((a, b) => (b.mcap_usd ?? 0) - (a.mcap_usd ?? 0) || (a.slug < b.slug ? -1 : 1));
+  }
+  const globalMultiple = winsorizedMedian(allRatios, cfg.winsorShare);
   return {
     globalMultiple,
+    peersFor: (p, n) =>
+      (liveByCategory.get(p.category ?? 'Uncategorized') ?? []).slice(0, n).map((q) => ({
+        name: q.name,
+        symbol: q.symbol,
+        tvl_usd: q.tvl_usd,
+        mcap_usd: q.mcap_usd!,
+        multiple: Math.round((q.mcap_usd! / q.tvl_usd) * 10_000) / 10_000,
+      })),
     multipleFor: (p) => {
       const list = ratios.get(p.category ?? 'Uncategorized');
-      return list !== undefined && list.length >= cfg.minCategoryPeers ? median(list) : globalMultiple;
+      if (list !== undefined && list.length >= cfg.minCategoryPeers) {
+        return { multiple: winsorizedMedian(list, cfg.winsorShare), source: 'category' as const };
+      }
+      const mates = new Map<string, number>();
+      for (const chain of p.chains) {
+        for (const q of byChain.get(chain) ?? []) {
+          if (q.mcap_usd !== null && q.tvl_usd > 0) mates.set(q.slug, q.mcap_usd / q.tvl_usd);
+        }
+      }
+      if (mates.size >= cfg.minCategoryPeers) {
+        return { multiple: winsorizedMedian([...mates.values()], cfg.winsorShare), source: 'chain' as const };
+      }
+      return { multiple: globalMultiple, source: 'global' as const };
     },
     peerMaxMcapFor: (p) => maxMcap.get(p.category ?? 'Uncategorized') ?? globalMax,
   };
 }
 
-/** The implied value of one protocol and the workings behind it. */
+/** The implied value of one protocol and every component that produced it. */
+export interface ValueWorkings {
+  implied: number;
+  multiple: number;
+  multipleSource: MultipleSource;
+  base: number;
+  growthMult: number;
+  maturityMult: number;
+  breadthMult: number;
+  capped: boolean;
+  age: number | null;
+}
+
 export function impliedValue(
   p: SnapshotProtocol,
   snapshot: Snapshot,
   peers: PeerBook,
   cfg: RadarConfig = CONFIG,
-): { implied: number; multiple: number; age: number | null } {
-  const multiple = peers.multipleFor(p);
+): ValueWorkings {
+  const { multiple, source } = peers.multipleFor(p);
   const growthPct = Math.min(cfg.growthCapPct, Math.max(cfg.growthFloorPct, p.change_7d ?? 0));
   const growthMult = 1 + (growthPct / 100) * cfg.growthWeight;
   const age = ageDays(snapshot.as_of, p.listed_at);
   const ageForModel = Math.min(age ?? cfg.unknownAgeDays, cfg.maturityDaysCap);
   const maturityMult = cfg.maturityFloor + (ageForModel / cfg.maturityDaysCap) * (1 - cfg.maturityFloor);
   const breadthMult = 1 + Math.min(cfg.breadthCap, cfg.breadthPerExtraChain * Math.max(0, p.chains.length - 1));
-  const raw = p.tvl_usd * multiple * growthMult * maturityMult * breadthMult;
+  const base = p.tvl_usd * multiple;
+  const raw = base * growthMult * maturityMult * breadthMult;
+  // Soft sanity cap: at the cap the value is the cap; past it only a small share of the
+  // excess counts, so the largest protocols keep their size order above the cap line.
   const cap = cfg.peerMaxCapMultiple * peers.peerMaxMcapFor(p);
-  return { implied: Math.max(1, Math.round(Math.min(raw, cap))), multiple, age };
+  const softened = raw <= cap ? raw : cap + (raw - cap) * cfg.capOverflowSlope;
+  return {
+    implied: Math.max(1, Math.round(softened)),
+    multiple,
+    multipleSource: source,
+    base,
+    growthMult,
+    maturityMult,
+    breadthMult,
+    capped: raw > cap,
+    age,
+  };
 }
 
 /** The board: every watchlist protocol, then the strongest early finds, ranked by implied value. */
@@ -197,6 +311,7 @@ export function buildBoard(snapshot: Snapshot, cfg: RadarConfig = CONFIG): Board
 
   const scored = [...chosen.values()].map((p) => ({ p, v: impliedValue(p, snapshot, peers, cfg) }));
   scored.sort((a, b) => b.v.implied - a.v.implied || (a.p.slug < b.p.slug ? -1 : 1));
+  const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
   return scored.map(({ p, v }, i) => ({
     slug: p.slug,
     name: p.name,
@@ -208,7 +323,14 @@ export function buildBoard(snapshot: Snapshot, cfg: RadarConfig = CONFIG): Board
     chains: p.chains,
     change_7d: p.change_7d,
     age_days: v.age,
-    peer_multiple: Math.round(v.multiple * 10_000) / 10_000,
+    peer_multiple: round4(v.multiple),
+    multiple_source: v.multipleSource,
+    base_value_usd: Math.round(v.base),
+    growth_factor: round4(v.growthMult),
+    maturity_factor: round4(v.maturityMult),
+    breadth_factor: round4(v.breadthMult),
+    capped: v.capped,
+    peers: peers.peersFor(p, 3),
     watchlist: watch.has(p.slug),
   }));
 }

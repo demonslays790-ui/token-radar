@@ -13,6 +13,20 @@ export const CONFIG = {
   /** A category's own peer multiple is trusted once it has at least this many live peers. */
   minCategoryPeers: 4,
 
+  /**
+   * Peer ratios are winsorized before the median: the most extreme this share at each
+   * tail is pulled in to the nearest kept value, so one absurd listing cannot drag the
+   * multiple a whole category is priced from.
+   */
+  winsorShare: 0.05,
+
+  /**
+   * The sanity cap is soft. Past capMultiple x the largest live peer's market cap an
+   * implied value keeps only this share of its excess: the biggest protocols stay in
+   * size order instead of piling up at one identical capped figure.
+   */
+  capOverflowSlope: 0.05,
+
   /** change_7d is a per cent. Clamp it before it moves a value: one week is a signal. */
   growthFloorPct: -60,
   growthCapPct: 120,
